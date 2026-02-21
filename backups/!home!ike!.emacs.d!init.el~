@@ -1,0 +1,76 @@
+;;; init.el --- Modular Emacs Configuration -*- lexical-binding: t; -*-
+
+;;; Commentary:
+;; Main entry point for modular Emacs configuration
+;; Focused on org-mode with intuitive keybindings and sidebar
+
+;;; Code:
+
+;; Setup package management
+(require 'package)
+(setq package-archives '(("melpa" . "https://melpa.org/packages/")
+                         ("gnu" . "https://elpa.gnu.org/packages/")))
+(package-initialize)
+
+;; Bootstrap use-package
+(unless (package-installed-p 'use-package)
+  (package-refresh-contents)
+  (package-install 'use-package))
+
+(require 'use-package)
+(setq use-package-always-ensure t
+      use-package-always-defer t  ; Lazy load packages
+      use-package-verbose t)      ; Show loading info
+
+;; Define configuration directory
+(defvar my-config-dir (expand-file-name "modules" user-emacs-directory)
+  "Directory containing modular configuration files.")
+
+;; Ensure modules directory exists
+(unless (file-directory-p my-config-dir)
+  (make-directory my-config-dir t))
+
+;; Load configuration modules
+(defun my-load-module (module)
+  "Load a configuration MODULE from the modules directory."
+  (let ((file (expand-file-name (concat module ".el") my-config-dir)))
+    (when (file-exists-p file)
+      (load file))))
+
+;; Load modules in order
+(my-load-module "ui-config")
+(my-load-module "org-config")
+(my-load-module "keybindings")
+(my-load-module "sidebar")
+(my-load-module "crdt-config")
+
+;; General settings
+(setq inhibit-startup-screen t
+      initial-scratch-message nil
+      ring-bell-function 'ignore
+      backup-directory-alist `(("." . ,(expand-file-name "backups" user-emacs-directory)))
+      auto-save-file-name-transforms `((".*" ,(expand-file-name "auto-saves/" user-emacs-directory) t)))
+
+;; Enable useful modes
+(tool-bar-mode -1)
+(menu-bar-mode -1)
+(when (fboundp 'scroll-bar-mode)
+  (scroll-bar-mode -1))
+(global-auto-revert-mode 1)
+(show-paren-mode 1)
+(electric-pair-mode 1)
+
+(provide 'init)
+;;; init.el ends here
+(custom-set-variables
+ ;; custom-set-variables was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(package-selected-packages nil))
+(custom-set-faces
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ )
