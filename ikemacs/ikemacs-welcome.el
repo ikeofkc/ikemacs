@@ -35,6 +35,8 @@
       (erase-buffer)
       (fundamental-mode)
       
+      (variable-pitch-mode 1) 
+      
       (insert "\n\n\n\n") 
       
       ;; 1. SVG Logo

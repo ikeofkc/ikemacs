@@ -10,8 +10,8 @@
 
 ;;; --- FRAME SIZING ---
 ;; Width is measured in characters, height is measured in lines
-(add-to-list 'default-frame-alist '(width . 135))
-(add-to-list 'default-frame-alist '(height . 40))
+(add-to-list 'default-frame-alist '(width . 140))
+(add-to-list 'default-frame-alist '(height . 35))
 
 (use-package catppuccin-theme
   :ensure t
@@ -110,5 +110,5 @@
 (ike/set-font-face 'default ike/variable-pitch-fonts)
 ;;; --- GLOBAL DEFAULT FONT ---
 ;; Set UI font to my preference Jost if installed (or the first available fallback)
-(ike/set-font-face 'default ike/variable-pitch-fonts)
+(ike/set-font-face 'default ike/fixed-pitch-fonts)
 (provide 'ikemacs-ui)
