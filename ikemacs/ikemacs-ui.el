@@ -105,4 +105,8 @@
 ;; Automatically enable mixed pitch in Org Mode
 (add-hook 'org-mode-hook #'ike/enable-mixed-pitch)
 
+;;; --- GLOBAL DEFAULT FONT ---
+;; Safely set the global UI font to my preference Jost (or the first available fallback)
+(ike/set-font-face 'default ike/variable-pitch-fonts)
+
 (provide 'ikemacs-ui)
