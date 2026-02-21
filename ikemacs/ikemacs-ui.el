@@ -108,5 +108,7 @@
 ;;; --- GLOBAL DEFAULT FONT ---
 ;; Safely set the global UI font to my preference Jost (or the first available fallback)
 (ike/set-font-face 'default ike/variable-pitch-fonts)
-
+;;; --- GLOBAL DEFAULT FONT ---
+;; Set UI font to my preference Jost if installed (or the first available fallback)
+(ike/set-font-face 'default ike/variable-pitch-fonts)
 (provide 'ikemacs-ui)
