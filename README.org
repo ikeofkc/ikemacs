@@ -1,7 +1,7 @@
 #+TITLE: Ikemacs
 #+OPTIONS: toc:nil num:nil
 
-[[file:ikemacs/screenshot.png]]
+[[file:screenshot.png]]
 
 /My personal emacs config optimized for org-mode outlining/
 /with keyboard shortcuts made for mere mortals/
