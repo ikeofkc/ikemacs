@@ -1,0 +1,51 @@
+#+TITLE: Ikemacs
+#+OPTIONS: toc:nil num:nil
+
+[[file:ikemacs/screenshot.png]]
+
+/My personal emacs config optimized for org-mode outlining/
+/with keyboard shortcuts made for mere mortals/
+
+* Stuff to-do
+
+** TODO Add toolbar on bottom for org buffers
+
+** TODO Add window split icon on sidebar
+
+** TODO Add stuff for inline images
+
+** TODO Split branch for specific knowledge graph package I decide on (probably org-supertag) so this could be shared to other people and they can use whatever they like best like org-roam or org-gnosis or denote or blah blah blah
+
+* Modern Keybindings
+
+| ACTION              | SHORTCUT            | CONTEXT          |
+|---------------------+---------------------+------------------|
+| Save File           | ~C-s~               | Global           |
+| Save As...          | ~C-S-s~             | Global           |
+| Open File           | ~C-o~               | Global           |
+| Smart Close Tab/Win | ~C-w~               | Global           |
+| New Tab             | ~C-t~               | Global           |
+| Restore Tab         | ~C-S-t~             | Global           |
+| Next / Prev Tab     | ~C-tab~ / ~C-S-tab~ | Global           |
+| Command Palette     | ~M-SPC~             | Global           |
+| Select All          | ~C-a~               | Global           |
+| Toggle Comment      | ~C-/~               | Code/Text        |
+| Format Bold         | ~C-b~               | Org Mode         |
+| Format Italic       | ~C-i~               | Org Mode         |
+| Format Underline    | ~C-u~               | Org Mode         |
+| Format Menu (Popup) | ~C-e~               | Org Mode         |
+
+* Preserved Org Quirks
+
+| ACTION                | SHORTCUT         | REASON               |
+|-----------------------+------------------+----------------------|
+| Move/Promote Headings | ~Alt + Arrows~   | Core Org Outline     |
+| Change Dates/TODOs    | ~Shift + Arrows~ | Core Org Workflow    |
+| Begin Text Selection  | ~Ctrl + SPC~     | Avoids Arrow Clashes |
+
+* Notable Config Changes (For Emacs Veterans)
+
+- Org headlines are explicitly un-bolded to maintain a clean outliner focus.
+- CUA mode is active for standard Copy/Paste, but Mark (~C-SPC~) is preserved.
+- Mixed-pitch typography is enabled automatically for Org-mode buffers.
+- Default UI chrome (menus, toolbars, scrollbars) is disabled for minimalism.
