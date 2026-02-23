@@ -105,22 +105,25 @@
           (insert "\n"))
       (insert "\n"))))
 
-(defun ike/sidebar--icon (name &optional color)
-  (nerd-icons-mdicon name :height 1.0 :v-adjust -0.1 :face `(:foreground ,(or color "#9180ff"))))
+;; FIXED: We now pull JUST the hex color from the face so it doesn't clobber the icon font
+(defun ike/sidebar--icon (name &optional face)
+  (let ((color (face-foreground (or face 'default) nil t)))
+    (nerd-icons-mdicon name :height 1.0 :v-adjust -0.1 :face `(:foreground ,color))))
 
 (defun ike/sidebar--render ()
   (with-current-buffer (get-buffer-create ike/sidebar-buffer-name)
     (let ((inhibit-read-only t))
       (erase-buffer)
       
-      (let* ((menu-icon (ike/sidebar--icon "nf-md-menu" "#9180ff"))
-             (refresh-icon (nerd-icons-mdicon "nf-md-refresh" :height 1.0 :v-adjust -0.1 :face '(:foreground "#50fa7b")))
+      ;; FIXED: Pulling colors from 'default and 'success faces
+      (let* ((menu-icon (ike/sidebar--icon "nf-md-menu"))
+             (refresh-icon (nerd-icons-mdicon "nf-md-refresh" :height 1.0 :v-adjust -0.1 
+                                             :face `(:foreground ,(face-foreground 'default nil t))))
              (padded-icon (propertize menu-icon 'display '(raise -0.25))))
         
         (insert-text-button
          (if ike/sidebar-expanded (concat padded-icon " Collapse") padded-icon)
          'action (lambda (_) 
-                   ;; ONLY save the width if we are currently expanded
                    (when ike/sidebar-expanded
                      (setq ike/sidebar-width (window-width ike/sidebar-window)))
                    (setq ike/sidebar-expanded (not ike/sidebar-expanded)) 
@@ -140,20 +143,21 @@
       
       (insert "\n\n")
 
-      (ike/sidebar--insert-button "Open/Create File" (ike/sidebar--icon "nf-md-folder_open" "#9180ff") 
+      (ike/sidebar--insert-button "Open/Create File" (ike/sidebar--icon "nf-md-folder_open") 
                                   #'ike/gui-visit-file-dialog "Open file") 
       
-      (ike/sidebar--insert-button "Search Notes" (ike/sidebar--icon "nf-md-magnify" "#9180ff") 
+      (ike/sidebar--insert-button "Search Notes" (ike/sidebar--icon "nf-md-magnify") 
                                   #'ike/sidebar-search-org "Search all notes") 
       
       (insert "\n")
       
-      (ike/sidebar--insert-button "Agenda (Week)" (ike/sidebar--icon "nf-md-calendar" "#9180ff") 
+      (ike/sidebar--insert-button "Agenda (Week)" (ike/sidebar--icon "nf-md-calendar") 
                                   (lambda () (interactive) (org-agenda-list nil nil 'week)) 
                                   "View current week")
       
       (when ike/sidebar-expanded
-        (let ((sub-icon (nerd-icons-mdicon "nf-md-subdirectory_arrow_right" :height 0.8 :face '(:foreground "#6272a4"))))
+        (let ((sub-icon (nerd-icons-mdicon "nf-md-subdirectory_arrow_right" :height 0.8 
+                                          :face `(:foreground ,(face-foreground 'shadow nil t)))))
           (insert "  " sub-icon " ")
           (insert-text-button "Day View" 
                               'action (ike/sidebar--make-callback (lambda () (interactive) (org-agenda-list nil nil 'day)))
@@ -165,10 +169,10 @@
                               'follow-link t 'face 'default)
           (insert "\n")))
 
-      (ike/sidebar--insert-button "Global TODOs" (ike/sidebar--icon "nf-md-format_list_bulleted" "#9180ff") 
+      (ike/sidebar--insert-button "Global TODOs" (ike/sidebar--icon "nf-md-format_list_bulleted") 
                                   #'org-todo-list "List all open tasks") 
       
-      (ike/sidebar--insert-button "Filter by Tag" (ike/sidebar--icon "nf-md-label_outline" "#9180ff") 
+      (ike/sidebar--insert-button "Filter by Tag" (ike/sidebar--icon "nf-md-label_outline") 
                                   #'ike/sidebar-search-tags-todo "Search active TODOs by Tag") 
       
       (when (and ike/sidebar-expanded (boundp 'ike/overdue-tasks-cache) ike/overdue-tasks-cache)
@@ -186,21 +190,23 @@
 
       (insert "\n")
       
-      (let ((pink "#ff79c6") (red "#ff5555"))
-        (ike/sidebar--insert-button "Share Buffer" (ike/sidebar--icon "nf-md-access_point" pink) #'crdt-share-buffer "Start CRDT")
-        (ike/sidebar--insert-button "Join Session" (ike/sidebar--icon "nf-md-link" pink) #'crdt-connect "Connect to URL") 
+      ;; FIXED: Collaboration block uses extracted color hexes
+      (let ((crdt-accent 'font-lock-keyword-face) 
+            (crdt-warn 'error))
+        (ike/sidebar--insert-button "Share Buffer" (ike/sidebar--icon "nf-md-access_point" crdt-accent) #'crdt-share-buffer "Start CRDT")
+        (ike/sidebar--insert-button "Join Session" (ike/sidebar--icon "nf-md-link" crdt-accent) #'crdt-connect "Connect to URL") 
         (when (ike/collab-is-active-p)
-          (ike/sidebar--insert-button "Copy Link" (ike/sidebar--icon "nf-md-content_copy" pink) #'ike/collab-copy-url-smart "Copy URL")
-          (ike/sidebar--insert-button "Follow Teammate" (ike/sidebar--icon "nf-md-eye" pink) #'ike/collab-follow-wrapper "Follow user")
-          (ike/sidebar--insert-button "Stop Following" (ike/sidebar--icon "nf-md-eye_off" pink) #'ike/collab-stop-follow "Stop follow")
-          (ike/sidebar--insert-button "User Manager" (ike/sidebar--icon "nf-md-account_group" pink) #'ike/collab-list-users-wrapper "User List")
-          (ike/sidebar--insert-button "Stop Session" (ike/sidebar--icon "nf-md-power" red) #'ike/collab-stop "Stop Session")
+          (ike/sidebar--insert-button "Copy Link" (ike/sidebar--icon "nf-md-content_copy" crdt-accent) #'ike/collab-copy-url-smart "Copy URL")
+          (ike/sidebar--insert-button "Follow Teammate" (ike/sidebar--icon "nf-md-eye" crdt-accent) #'ike/collab-follow-wrapper "Follow user")
+          (ike/sidebar--insert-button "Stop Following" (ike/sidebar--icon "nf-md-eye_off" crdt-accent) #'ike/collab-stop-follow "Stop follow")
+          (ike/sidebar--insert-button "User Manager" (ike/sidebar--icon "nf-md-account_group" crdt-accent) #'ike/collab-list-users-wrapper "User List")
+          (ike/sidebar--insert-button "Stop Session" (ike/sidebar--icon "nf-md-power" crdt-warn) #'ike/collab-stop "Stop Session")
           (when ike/sidebar-expanded (insert (propertize "  Active Sessions:\n" 'face 'bold))
             (dolist (b (ike/collab-get-active-buffers)) (insert-text-button (format "  • %s" (buffer-name b)) 'action (lambda (_) (run-with-timer 0.05 nil (lambda () (switch-to-buffer b)))) 'follow-link t) (insert "\n")))))
       
       (insert "\n")
       
-      (ike/sidebar--insert-button "Recent Files" (ike/sidebar--icon "nf-md-history" "#9180ff") #'recentf-open "Recent Files") 
+      (ike/sidebar--insert-button "Recent Files" (ike/sidebar--icon "nf-md-history") #'recentf-open "Recent Files") 
       (recentf-load-list)
       (when ike/sidebar-expanded 
         (dolist (f (seq-take recentf-list 5)) 
@@ -219,10 +225,9 @@
       (setq-local cursor-type nil)
       (setq-local cursor-in-non-selected-windows nil)
       
-      ;; STATE-DEPENDENT MOUSE LOCK
       (if ike/sidebar-expanded
-          (setq-local window-size-fixed nil)      ;; Free to drag when expanded
-        (setq-local window-size-fixed 'width))))) ;; Locked tight when collapsed
+          (setq-local window-size-fixed nil)
+        (setq-local window-size-fixed 'width)))))
 
 (defun ike/sidebar--show ()
   "Show the sidebar. Fixed width when collapsed, resizable when expanded."
@@ -232,7 +237,6 @@
            (window-min-width 1)
            (window-safe-min-width 1))
       
-      ;; 1. ONLY create the window if it doesn't already exist
       (unless (and ike/sidebar-window (window-live-p ike/sidebar-window))
         (setq ike/sidebar-window 
               (display-buffer-in-side-window buf 
@@ -245,11 +249,9 @@
       (set-window-dedicated-p ike/sidebar-window t)
       (set-window-parameter ike/sidebar-window 'min-width 1)
       
-      ;; 2. UNLOCK the buffer so our code is allowed to shrink it
       (with-current-buffer buf
         (setq-local window-size-fixed nil))
       
-      ;; 3. Smoothly slide the window edge to the target width
       (let ((delta (- target-width (window-width ike/sidebar-window))))
         (when (/= delta 0)
           (ignore-errors
@@ -257,7 +259,6 @@
             
       (window-preserve-size ike/sidebar-window t t) 
       
-      ;; 4. Render content
       (with-selected-window ike/sidebar-window 
         (ike/sidebar--render)))))
 

@@ -9,44 +9,34 @@
 (define-key global-map (kbd "C-q") nil)
 
 ;; Bind C-o to behave like 'visit new file' using system file dialog
-(define-key global-map (kbd "C-o") nil)
 (define-key global-map (kbd "C-o") #'ike/gui-visit-file-dialog)
 
 ;; Remap C-s to save the current buffer
-(define-key global-map (kbd "C-s") nil)
 (define-key global-map (kbd "C-s") #'ike/gui-save-file)
 
 ;; Remap Ctrl-Shift-s to save with a specific filename
-(define-key global-map (kbd "C-S-s") nil)
 (define-key global-map (kbd "C-S-s") #'ike/gui-save-file-as)
 
 ;; Remap Ctrl-Shift-Z to perform redo
-(define-key global-map (kbd "C-S-z") nil)
 (define-key global-map (kbd "C-S-z") 'undo-redo)
 
 ;; Remap C-A to select all
-(define-key global-map (kbd "C-a") nil)
 (define-key global-map (kbd "C-a") 'mark-whole-buffer)
 
 ;; Remap C-/ to select all
-(define-key global-map (kbd "C-/") nil)
 (define-key global-map (kbd "C-/") 'comment-line)
 
 ;; Make ESC do same thing as Ctrl-G
 (global-set-key (kbd "<escape>") 'keyboard-escape-quit)
 
 ;; Remap C-<tab> and <C-S-<tab> to cycle between tab-bar tabs
-(define-key global-map (kbd "C-<tab>") nil)
 (define-key global-map (kbd "C-<tab>") 'tab-bar-switch-to-next-tab)
-(define-key global-map (kbd "C-S-<tab>") nil)
 (define-key global-map (kbd "C-S-<tab>") 'tab-bar-switch-to-prev-tab)
 
 ;; Creating a new tab with Ctrl+t
-(define-key global-map (kbd "C-t") nil)
 (define-key global-map (kbd "C-t") 'tab-bar-new-tab)
 
-(define-key global-map (kbd "C-w") nil)
-;; (define-key global-map (kbd "C-w") 'tab-close)
+
 
 ;; Custom function to handle hierarchical closing
 (defun ike/smart-close ()
@@ -72,12 +62,6 @@
          ;; Else -> Close Tab
          (tab-bar-close-tab))))))
 
-;; Remap C-w (ensure this is still present)
-(define-key global-map (kbd "C-w") nil)
-(define-key global-map (kbd "C-w") 'ike/smart-close)
-
-;; Remap C-w to the smart close function
-(define-key global-map (kbd "C-w") nil)
 (define-key global-map (kbd "C-w") 'ike/smart-close)
 
 

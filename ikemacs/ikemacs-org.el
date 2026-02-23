@@ -66,11 +66,10 @@
   (require 'org-element)
   (require 'transient)
   (require 'org-mouse)
-  
+  (setq org-complete-tags-always-offer-all-agenda-tags t)
   ;; --- WINDOW MANAGEMENT ---
   (setq org-agenda-window-setup 'current-window)
   (setq org-agenda-restore-windows-after-quit t)
-  
   (setq org-M-RET-may-split-line t)
   (setq org-startup-indented t)
   (setq org-level-color-stars-only t)
@@ -85,14 +84,22 @@
   (set-face-attribute 'org-hide nil :inherit 'fixed-pitch)
   
   (setq org-refile-targets '((nil :maxlevel . 3) (org-agenda-files :maxlevel . 3)))
-  (setq org-todo-keywords '((sequence "TODO" "UNDERWAY" "|" "DONE")))
-
+  (setq org-todo-keywords '((sequence "TODO" "OPEN" "ACTIVE" "|" "BLOCKED" "DONE")))
+  ;; ORG Keybindings
   (define-key org-mode-map (kbd "<S-return>") nil)
   (define-key org-mode-map (kbd "<S-return>") 'org-return)
   (define-key org-mode-map (kbd "C-^") 'org-sort)
-  (define-key org-mode-map (kbd "RET") 'org-dynamic-return))
+  (define-key org-mode-map (kbd "RET") 'org-dynamic-return)
+  ;; Alt + Arrows: make line/heading vs subtree consistent
+  (define-key org-mode-map (kbd "M-<up>") 'org-shiftmetaup)
+  (define-key org-mode-map (kbd "M-<down>") 'org-shiftmetadown)
+  (define-key org-mode-map (kbd "M-S-<up>") 'org-metaup)
+  (define-key org-mode-map (kbd "M-S-<down>") 'org-metadown)
 
-;; --- LAZY LOAD: ORG-QL ---
+  )
+
+
+;; LAZY LOAD: ORG-QL
 (use-package org-ql 
   :ensure t
   :defer t

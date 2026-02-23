@@ -1,17 +1,16 @@
 ;;; ikemacs-ui.el --- UI Visuals and Theme -*- lexical-binding: t; -*-
 
+;;Note: I moved some stuff to early-init.el so  you might want to also look at that package
+
 (require 'seq) ;; Required for font detection
 
-;; Disable toolbar/menubar/scrollbars early for speed
+;; Hide ugly (sorry) UI elements
+(scroll-bar-mode -1)
 (tool-bar-mode -1)
 (menu-bar-mode -1)
-(scroll-bar-mode -1)
+
 (setq inhibit-splash-screen t)
 
-;;; --- FRAME SIZING ---
-;; Width is measured in characters, height is measured in lines
-(add-to-list 'default-frame-alist '(width . 140))
-(add-to-list 'default-frame-alist '(height . 35))
 
 (use-package catppuccin-theme
   :ensure t
@@ -105,9 +104,7 @@
 ;; Automatically enable mixed pitch in Org Mode
 (add-hook 'org-mode-hook #'ike/enable-mixed-pitch)
 
-;;; --- GLOBAL DEFAULT FONT ---
-;; Safely set the global UI font to my preference Jost (or the first available fallback)
-(ike/set-font-face 'default ike/variable-pitch-fonts)
+
 ;;; --- GLOBAL DEFAULT FONT ---
 ;; Set UI font to my preference Jost if installed (or the first available fallback)
 (ike/set-font-face 'default ike/fixed-pitch-fonts)
