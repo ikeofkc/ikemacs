@@ -133,13 +133,22 @@
       (setq-local cursor-type nil)
       (local-set-key (kbd "q") 'bury-buffer))))
 
-;; --- 1. DYNAMIC RECENTERING ---
+;; --- 1. DYNAMIC RECENTERING (Debounced) ---
+(defvar ike/welcome--resize-timer nil
+  "Timer for debouncing welcome screen redraws on resize.")
+
 (defun ike/welcome--resize-watchdog (&optional _frame)
-  "Redraw the welcome screen to maintain centering if the window size changes."
+  "Redraw the welcome screen after resize, debounced to avoid excessive re-renders."
   (when (get-buffer-window ike/welcome-buffer-name)
-    (let ((win (get-buffer-window ike/welcome-buffer-name)))
-      (with-selected-window win
-        (ike/welcome-render)))))
+    (when ike/welcome--resize-timer
+      (cancel-timer ike/welcome--resize-timer))
+    (setq ike/welcome--resize-timer
+          (run-with-idle-timer 0.15 nil
+                               (lambda ()
+                                 (when (get-buffer-window ike/welcome-buffer-name)
+                                   (let ((win (get-buffer-window ike/welcome-buffer-name)))
+                                     (with-selected-window win
+                                       (ike/welcome-render)))))))))
 
 (add-hook 'window-size-change-functions #'ike/welcome--resize-watchdog)
 

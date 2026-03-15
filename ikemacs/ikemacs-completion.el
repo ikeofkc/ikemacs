@@ -17,13 +17,7 @@
 
 (setq ivy-magic-slash-non-match-action 'ivy-magic-slash-non-match-create)
 
-;; --- NERD ICONS MIGRATION ---
-(use-package nerd-icons
-  :ensure t
-  :config
-  ;; Check for the standard Nerd Font family
-  (unless (find-font (font-spec :name "Symbols Nerd Font Mono"))
-    (message "Ikemacs: Nerd Fonts missing. Run 'M-x nerd-icons-install-fonts' to fix.")))
+;; Note: nerd-icons is configured in ikemacs-ui.el
 
 (use-package nerd-icons-ivy-rich
   :ensure t

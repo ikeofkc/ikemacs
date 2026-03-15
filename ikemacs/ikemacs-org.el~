@@ -163,18 +163,9 @@
 (defun my-org-has-child-p () (interactive) (save-excursion (org-goto-first-child)))
 
 (defun org-dynamic-return () (interactive)
-  (let* ((element (org-element-at-point))
-         (type (org-element-type element)))
-    (cond
-     ;; Inside any block: just insert a plain newline
-     ((memq type '(src-block verse-block quote-block example-block
-                              center-block special-block export-block))
-      (org-return))
-     ;; On a TODO heading: insert a new TODO heading
-     ((and (eq type 'headline) (org-element-property :todo-keyword element))
-      (org-insert-todo-heading t))
-     ;; Default: smart meta-return for headings/lists
-     (t (org-meta-return)))))
+  (let ((element (org-element-at-point)))
+    (if (and (eq (org-element-type element) 'headline) (org-element-property :todo-keyword element))
+        (org-insert-todo-heading t) (org-meta-return))))
 
 ;; Initial Scan (2 seconds after load)
 (run-with-idle-timer 2 nil #'ike/refresh-agenda-files)

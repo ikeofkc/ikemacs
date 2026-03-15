@@ -23,6 +23,27 @@
 
 ;; --- HELPERS ---
 
+(defun ike/collab--detect-local-ip ()
+  "Detect the local LAN IP address cross-platform.
+Returns the first non-loopback IPv4 address, or \"localhost\" as fallback."
+  (let ((ip-data
+         (cond
+          ((eq system-type 'windows-nt)
+           (shell-command-to-string "ipconfig"))
+          ((eq system-type 'darwin)
+           (shell-command-to-string "ifconfig 2>/dev/null || ip addr 2>/dev/null"))
+          (t ;; Linux and others
+           (shell-command-to-string "ip addr 2>/dev/null || ifconfig 2>/dev/null")))))
+    (cond
+     ;; Windows: "IPv4 Address... : 192.168.x.x"
+     ((string-match "IPv4 Address[^:]+: \\([0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+\\)" ip-data)
+      (match-string 1 ip-data))
+     ;; Linux/macOS: "inet 192.168.x.x" (skip 127.0.0.1)
+     ((string-match "inet \\([0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+\\)" 
+                     (replace-regexp-in-string "inet 127\\.[0-9.]+" "" ip-data))
+      (match-string 1 (replace-regexp-in-string "inet 127\\.[0-9.]+" "" ip-data)))
+     (t "localhost"))))
+
 (defun ike/collab-get-active-buffers ()
   (seq-filter (lambda (b)
                 (with-current-buffer b
@@ -86,10 +107,7 @@
           (if (and (boundp 'crdt--session) crdt--session)
               (let* ((process (crdt--session-network-process crdt--session))
                      (port (if process (process-contact process :service) 6530))
-                     (ip-data (shell-command-to-string "ipconfig"))
-                     (host (if (string-match "IPv4 Address[^:]+: \\([0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+\\)" ip-data)
-                               (match-string 1 ip-data)
-                             "localhost"))
+                     (host (ike/collab--detect-local-ip))
                      (url-string (format "%s:%s" host port)))
                 (kill-new url-string)
                 (message "Shared URL copied to clipboard: %s" url-string))

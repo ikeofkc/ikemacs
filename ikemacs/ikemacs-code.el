@@ -13,11 +13,6 @@
    (setq web-mode-css-indent-offset 2)
    (setq web-mode-markup-indent-offset 2))
 
-(use-package crdt
-  :ensure t
-  :bind
-  ("C-c c s" . crdt-share-buffer)
-  ("C-c c c" . crdt-connect)
-  ("C-c c d" . crdt-disconnect))
+;; Note: CRDT collaboration is configured in ikemacs-collab.el
 
 (provide 'ikemacs-code)

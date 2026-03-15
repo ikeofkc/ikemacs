@@ -5,7 +5,7 @@
 ;; Set up Alt+Space to open the command palette
 (global-set-key (kbd "M-SPC") 'execute-extended-command)
 
-;; set Ctrl-Q to quit with save prompt
+;; Unbind C-q (was quoted-insert) — reserved for future use (e.g. quit-with-prompt)
 (define-key global-map (kbd "C-q") nil)
 
 ;; Bind C-o to behave like 'visit new file' using system file dialog
@@ -28,6 +28,9 @@
 
 ;; Make ESC do same thing as Ctrl-G
 (global-set-key (kbd "<escape>") 'keyboard-escape-quit)
+;; Extra because escxape was not working in transient menus
+(with-eval-after-load 'transient
+  (define-key transient-base-map (kbd "<escape>") #'transient-quit-one))
 
 ;; Remap C-<tab> and <C-S-<tab> to cycle between tab-bar tabs
 (define-key global-map (kbd "C-<tab>") 'tab-bar-switch-to-next-tab)
@@ -36,6 +39,8 @@
 ;; Creating a new tab with Ctrl+t
 (define-key global-map (kbd "C-t") 'tab-bar-new-tab)
 
+;; Restore last closed tab with Ctrl+Shift+t
+(define-key global-map (kbd "C-S-t") 'tab-bar-undo-close-tab)
 
 
 ;; Custom function to handle hierarchical closing

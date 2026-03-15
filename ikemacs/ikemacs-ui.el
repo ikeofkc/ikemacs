@@ -19,6 +19,29 @@
   (load-theme 'catppuccin :no-confirm)
   (set-face-attribute 'region nil :background "#039177" :foreground "#ffffff"))
 
+;;; --- NERD ICONS ---
+(use-package nerd-icons
+  :ensure t
+  :config
+  ;; Auto-install Nerd Fonts if missing (Linux/macOS only — Windows requires manual install)
+  (unless (find-font (font-spec :name "Symbols Nerd Font Mono"))
+    (if (memq system-type '(gnu/linux darwin))
+        (progn
+          (message "Ikemacs: Nerd Fonts missing. Installing automatically...")
+          (nerd-icons-install-fonts t)
+          ;; Force Emacs to pick up the newly installed fonts and refresh the UI
+          (run-with-idle-timer 2 nil
+                               (lambda ()
+                                 ;; Rebuild system font cache (Linux/macOS)
+                                 (call-process-shell-command "fc-cache -f" nil 0)
+                                 ;; Force Emacs to rescan available fonts
+                                 (set-frame-font (frame-parameter nil 'font) nil t)
+                                 ;; Re-render the sidebar so icons appear
+                                 (when (fboundp 'ike/sidebar--render)
+                                   (ike/sidebar--render))
+                                 (message "Ikemacs: Nerd Fonts installed. UI refreshed."))))
+      (message "Ikemacs: Nerd Fonts missing. Run 'M-x nerd-icons-install-fonts' to install."))))
+
 ;;; --- CURSOR SHAPE ---
 (setq-default cursor-type '(bar . 2))
 (add-hook 'overwrite-mode-hook
