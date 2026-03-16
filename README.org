@@ -8,9 +8,9 @@
 
 * Stuff to-do
 
-** TODO Add toolbar on bottom for org buffers
+** DONE Add toolbar on bottom for org buffers
 
-** TODO Add window split icon on sidebar
+** DONE Add window split icon on ~sidebar~ top bar (added a top bar)
 
 ** TODO Add stuff for inline images
 
