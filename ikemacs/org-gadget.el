@@ -2,7 +2,7 @@
 
 ;; Author: Ikemacs Contributors
 ;; Version: 1.0.0
-;; Package-Requires: ((emacs "29.1") (nerd-icons "0.1.0") (transient "0.4.0") (org "9.6"))
+;; Package-Requires: ((emacs "29.1") (nerd-icons "0.1.0") (org "9.6"))
 ;; Keywords: org, tools, convenience
 ;; URL: https://github.com/ikemacs/org-gadget
 
@@ -10,9 +10,9 @@
 ;;
 ;; A standalone Org-mode enhancement providing:
 ;;  - A horizontal icon toolbar that auto-shows below Org file buffers
-;;  - Touch-friendly transient menus for TODO, priority, agenda, sorting,
+;;  - Native touch-friendly popup menus for TODO, priority, agenda, sorting,
 ;;    emphasis, dates/recurring, links, blocks, and archiving
-;;  - Smart interaction: tap/click (primary), long-press 300ms (secondary),
+;;  - Smart interaction: tap/click (primary), long-press (native touch),
 ;;    right-click (secondary/menu)
 ;;  - Theme-adaptive icon colors pulled from semantic Emacs faces
 ;;  - Data-driven icon groups that are trivially reorderable
@@ -20,9 +20,6 @@
 ;; Quick start:
 ;;   (require 'org-gadget)
 ;;   (org-gadget-mode 1)
-;;
-;; Reorder toolbar groups:
-;;   (setq org-gadget-group-order '(content productivity organize))
 
 ;;; Code:
 
@@ -31,7 +28,6 @@
 ;; ═══════════════════════════════════════════════════════
 
 (require 'nerd-icons)
-(require 'transient)
 (require 'org)
 (require 'org-element)
 
@@ -40,14 +36,13 @@
 ;; ═══════════════════════════════════════════════════════
 
 (defgroup org-gadget nil
-  "Touch-friendly Org-mode toolbar and transient menus."
+  "Touch-friendly Org-mode toolbar and native popup menus."
   :group 'org
   :prefix "org-gadget-")
 
 (defcustom org-gadget-group-order '(productivity organize content meta)
   "Display order of toolbar icon groups.
-Rearrange to reorder, remove a symbol to hide that group.
-Available: `productivity', `organize', `content', `meta'."
+Rearrange to reorder, remove a symbol to hide that group."
   :type '(repeat symbol)
   :group 'org-gadget)
 
@@ -56,8 +51,7 @@ Available: `productivity', `organize', `content', `meta'."
     (organize     . font-lock-function-name-face)
     (content      . font-lock-string-face)
     (meta         . font-lock-comment-face))
-  "Alist mapping group symbols to the face for their icon color.
-The toolbar adapts to any Emacs theme automatically."
+  "Alist mapping group symbols to the face for their icon color."
   :type '(alist :key-type symbol :value-type face)
   :group 'org-gadget)
 
@@ -74,23 +68,20 @@ The toolbar adapts to any Emacs theme automatically."
 (defvar org-gadget--window nil "Window displaying the toolbar.")
 (defvar org-gadget--last-org-window nil "Last window visiting an Org file.")
 
-;; Long-press state
 (defvar org-gadget--press-fired nil
   "Set to t when a long-press fires, to suppress the subsequent mouse-1.")
 
-;; Emphasis preview
 (defvar org-gadget--preview-overlays nil)
 
-;; Arrow collapse state
 (defvar org-gadget--arrows-expanded nil
   "When nil, collapsible arrow icons are hidden from the toolbar.")
 
 ;; ═══════════════════════════════════════════════════════
-;; WINDOW TRACKING  (mirrors the working sidebar pattern)
+;; WINDOW TRACKING
 ;; ═══════════════════════════════════════════════════════
 
 (defun org-gadget--record-org-window ()
-  "Track the last window the user interacted with (excluding toolbar/minibuffer)."
+  "Track the last window the user interacted with."
   (let ((win (selected-window)))
     (when (and (window-live-p win)
                (not (window-minibuffer-p win))
@@ -100,8 +91,7 @@ The toolbar adapts to any Emacs theme automatically."
       (setq org-gadget--last-org-window win))))
 
 (defun org-gadget--select-main-window ()
-  "Focus the last known editable window.
-Uses the tracked window first, falls back to any non-dedicated window."
+  "Focus the last known editable window."
   (cond
    ((and org-gadget--last-org-window
          (window-live-p org-gadget--last-org-window)
@@ -119,42 +109,44 @@ Uses the tracked window first, falls back to any non-dedicated window."
         (select-window win))))))
 
 ;; ═══════════════════════════════════════════════════════
-;; DEFERRED ACTION RUNNER
+;; DEFERRED ACTION RUNNERS
 ;; ═══════════════════════════════════════════════════════
-;;
-;; ALL toolbar actions MUST go through this.
-;; Without the 0.05s delay, the mouse event is still being processed
-;; when we try to switch windows, causing actions to silently fail.
-;; This is the same pattern that makes the sidebar reliable.
 
 (defun org-gadget--make-callback (fn)
-  "Create a deferred callback that runs FN in the main Org window.
-Returns an interactive lambda suitable for keymap bindings."
-  (lambda (&rest _)
-    (interactive)
+  "Create a deferred callback that runs FN in the main Org window."
+  (lambda (&optional event)
+    (interactive "e")
     (run-with-timer
      0.05 nil
-     (lambda ()
+     (lambda (evt)
        (org-gadget--select-main-window)
-       (if (commandp fn)
-           (call-interactively fn)
-         (funcall fn))))))
+       ;; Try passing the event so x-popup-menu knows where to draw
+       (condition-case nil
+           (funcall fn evt)
+         ;; Fallback if the function doesn't accept coordinate arguments
+         (wrong-number-of-arguments
+          (if (commandp fn)
+              (call-interactively fn)
+            (funcall fn)))))
+     event)))
 
 (defun org-gadget--make-lp-callback (fn)
-  "Create a long-press callback that runs FN after exiting the touch handler.
-Uses zero-delay timer so Emacs finishes processing the touch event
-before we switch windows and open a transient menu."
-  (lambda (&rest _)
-    (interactive)
+  "Create a long-press callback that dynamically handles native popup menus."
+  (lambda (&optional event)
+    (interactive "e")
     (run-with-timer
      0 nil
-     (lambda ()
+     (lambda (evt)
        (org-gadget--select-main-window)
        (condition-case err
-           (if (commandp fn)
-               (call-interactively fn)
-             (funcall fn))
-         (error (message "org-gadget long-press: %S" err)))))))
+           (condition-case nil
+               (funcall fn evt)
+             (wrong-number-of-arguments
+              (if (commandp fn)
+                  (call-interactively fn)
+                (funcall fn))))
+         (error (message "org-gadget menu error: %S" err))))
+     event)))
 
 ;; ═══════════════════════════════════════════════════════
 ;; ICON HELPER
@@ -176,21 +168,18 @@ before we switch windows and open a transient menu."
 ;; ═══════════════════════════════════════════════════════
 
 (defun org-gadget--bounds-of-word-or-region ()
-  "Return (BEG . END) of active region, symbol, or word at point."
   (cond
    ((use-region-p) (cons (region-beginning) (region-end)))
    ((bounds-of-thing-at-point 'symbol))
    ((bounds-of-thing-at-point 'word))))
 
 (defun org-gadget--emphasis-type-for-marker (marker)
-  "Map emphasis MARKER char to its Org element type symbol."
   (pcase marker
     (?* 'bold)  (?/ 'italic)  (?_ 'underline)
     (?+ 'strike-through)  (?~ 'code)  (?= 'verbatim)
     (_  nil)))
 
 (defun org-gadget--inside-emphasis-p (type pt)
-  "Return emphasis element of TYPE surrounding PT, or nil."
   (save-excursion
     (goto-char pt)
     (let ((elem (org-element-lineage (org-element-context)
@@ -201,7 +190,6 @@ before we switch windows and open a transient menu."
         elem))))
 
 (defun org-gadget-emphasis-toggle (marker)
-  "Toggle Org emphasis MARKER on region or word at point."
   (let* ((type (org-gadget--emphasis-type-for-marker marker))
          (bounds (org-gadget--bounds-of-word-or-region)))
     (unless type (user-error "Unsupported marker: %S" marker))
@@ -231,12 +219,10 @@ before we switch windows and open a transient menu."
 (defun org-gadget-underline () "Toggle underline." (interactive) (org-gadget-emphasis-toggle ?_))
 
 (defun org-gadget--clear-previews ()
-  "Remove all emphasis preview overlays."
   (mapc #'delete-overlay org-gadget--preview-overlays)
   (setq org-gadget--preview-overlays nil))
 
 (defun org-gadget--emphasis-apply (marker)
-  "Clear previews and apply emphasis MARKER."
   (org-gadget--clear-previews)
   (org-gadget-emphasis-toggle marker))
 
@@ -245,7 +231,6 @@ before we switch windows and open a transient menu."
 ;; ═══════════════════════════════════════════════════════
 
 (defun org-gadget-priority-smart-cycle ()
-  "Cycle priority: unset→A→B→C→unset."
   (interactive)
   (let ((current (org-entry-get nil "PRIORITY")))
     (if (or (null current)
@@ -255,30 +240,19 @@ before we switch windows and open a transient menu."
       (org-priority 'down))))
 
 (defun org-gadget-agenda-combo ()
-  "Show combined Agenda + all TODOs view."
   (interactive)
   (org-agenda nil "n"))
 
 ;; ═══════════════════════════════════════════════════════
 ;; FOLD / UNFOLD HELPERS
 ;; ═══════════════════════════════════════════════════════
-;;
-;; We cannot use `execute-kbd-macro (kbd "TAB")` because this config
-;; remaps C-i (same keycode as TAB) to italicize via input-decode-map.
-;; We also cannot just call `org-cycle' from a timer because it relies
-;; on `last-command' / `this-command' to track its fold state.
-;;
-;; Solution: detect the ACTUAL visibility state of the heading each
-;; time and decide the correct next action.  No stale state variables.
 
 (defun org-gadget--heading-has-children-p ()
-  "Return non-nil if heading at point has child headings."
   (save-excursion
     (org-back-to-heading t)
     (org-goto-first-child)))
 
 (defun org-gadget--heading-has-body-p ()
-  "Return non-nil if heading at point has body text (not just sub-headings)."
   (save-excursion
     (org-back-to-heading t)
     (let ((heading-end (line-end-position))
@@ -287,30 +261,24 @@ before we switch windows and open a transient menu."
                          (if (org-goto-first-child)
                              (line-beginning-position)
                            nil))))
-      ;; There's body if there is content between heading line and
-      ;; either the first child or the end of subtree
       (let ((body-end (or child-start subtree-end)))
         (> body-end (1+ heading-end))))))
 
 (defun org-gadget--subtree-is-leaf-p ()
-  "Return non-nil if heading at point has no content below it at all."
   (save-excursion
     (org-back-to-heading t)
     (= (line-end-position)
        (save-excursion (org-end-of-subtree t) (point)))))
 
 (defun org-gadget--heading-folded-p ()
-  "Return non-nil if any content under heading at point is invisible."
   (save-excursion
     (org-back-to-heading t)
     (let ((eol (line-end-position))
           (end (save-excursion (org-end-of-subtree t) (point))))
       (when (< eol end)
-        ;; Check if the character right after the heading line is invisible
         (org-invisible-p (1+ eol))))))
 
 (defun org-gadget--heading-fully-visible-p ()
-  "Return non-nil if ALL content under heading at point is visible."
   (save-excursion
     (org-back-to-heading t)
     (let ((end (save-excursion (org-end-of-subtree t) (point)))
@@ -319,89 +287,57 @@ before we switch windows and open a transient menu."
       (while (and all-visible (< pos end))
         (when (org-invisible-p pos)
           (setq all-visible nil))
-        ;; Jump to next change in visibility to avoid checking every char
         (setq pos (next-single-char-property-change pos 'invisible nil end)))
       all-visible)))
 
 (defun org-gadget-fold-cycle ()
-  "Smart visibility cycling for the heading at point.
-Detects current state and picks the right next action:
-  FOLDED  → CHILDREN (if heading has children, else → SUBTREE)
-  CHILDREN → SUBTREE
-  SUBTREE  → FOLDED
-Leaf headings (no content at all) are skipped with a message."
   (interactive)
   (when (derived-mode-p 'org-mode)
     (save-excursion
       (org-back-to-heading t)
       (cond
-       ;; Leaf heading: nothing to fold/unfold
        ((org-gadget--subtree-is-leaf-p)
         (message "Nothing to fold (leaf heading)"))
-       ;; Currently folded → unfold
        ((org-gadget--heading-folded-p)
         (if (org-gadget--heading-has-children-p)
-            ;; Has children: show entry + children (one level)
-            (progn
-              (org-show-entry)
-              (org-show-children)
-              (message "CHILDREN"))
-          ;; No children, just body text: show everything
-          (progn
-            (org-show-subtree)
-            (message "SUBTREE"))))
-       ;; Currently fully visible → fold
+            (progn (org-show-entry) (org-show-children) (message "CHILDREN"))
+          (progn (org-show-subtree) (message "SUBTREE"))))
        ((org-gadget--heading-fully-visible-p)
-        (outline-hide-subtree)
-        (message "FOLDED"))
-       ;; Partially visible (children shown, subtree not) → show all
+        (outline-hide-subtree) (message "FOLDED"))
        (t
-        (org-show-subtree)
-        (message "SUBTREE"))))))
+        (org-show-subtree) (message "SUBTREE"))))))
 
-(defvar org-gadget--global-fold-state nil
-  "Global fold state: nil → 'overview → 'contents → 'show-all.")
+(defvar org-gadget--global-fold-state nil)
 
 (defun org-gadget-fold-cycle-global ()
-  "Cycle global visibility: overview → contents → show all.
-Works reliably from toolbar callbacks without depending on
-`last-command' or the S-TAB keybinding."
   (interactive)
   (when (derived-mode-p 'org-mode)
     (pcase org-gadget--global-fold-state
       ((or 'nil 'show-all)
-       (org-overview)
-       (setq org-gadget--global-fold-state 'overview)
-       (message "OVERVIEW"))
+       (org-overview) (setq org-gadget--global-fold-state 'overview) (message "OVERVIEW"))
       ('overview
-       (org-content)
-       (setq org-gadget--global-fold-state 'contents)
-       (message "CONTENTS"))
+       (org-content) (setq org-gadget--global-fold-state 'contents) (message "CONTENTS"))
       ('contents
-       (org-show-all)
-       (setq org-gadget--global-fold-state 'show-all)
-       (message "SHOW ALL")))))
+       (org-show-all) (setq org-gadget--global-fold-state 'show-all) (message "SHOW ALL")))))
+
+(defun org-gadget-toggle-arrows ()
+  (interactive)
+  (setq org-gadget--arrows-expanded (not org-gadget--arrows-expanded))
+  (when (and org-gadget--window (window-live-p org-gadget--window))
+    (with-selected-window org-gadget--window
+      (org-gadget--render))))
 
 ;; ═══════════════════════════════════════════════════════
-;; SORT HELPER
+;; SORT / RECURRING EVENT HELPERS
 ;; ═══════════════════════════════════════════════════════
 
 (defun org-gadget--sort (key)
-  "Sort by KEY, respecting the Reverse flag."
-  (let* ((args (transient-args 'org-gadget-sort-menu))
-         (reverse (member "-r" args))
-         (final-key (if reverse (upcase key) (downcase key))))
-    (cond
-     ((org-at-item-p)    (org-sort-list nil final-key))
-     ((org-at-heading-p) (org-sort-entries nil final-key))
-     (t (user-error "Place point on a heading or list item to sort")))))
-
-;; ═══════════════════════════════════════════════════════
-;; RECURRING EVENT HELPERS
-;; ═══════════════════════════════════════════════════════
+  (cond
+   ((org-at-item-p)    (org-sort-list nil key))
+   ((org-at-heading-p) (org-sort-entries nil key))
+   (t (user-error "Place point on a heading or list item to sort"))))
 
 (defun org-gadget-schedule-repeating ()
-  "Schedule with a repeating interval."
   (interactive)
   (let* ((choices '(("Every day (+1d)"     . "+1d")
                     ("Every week (+1w)"    . "+1w")
@@ -413,33 +349,24 @@ Works reliably from toolbar callbacks without depending on
          (repeater (cdr (assoc choice choices))))
     (when (eq repeater 'custom)
       (let ((n (read-string "Every N: " "1"))
-            (unit (completing-read "Unit: "
-                                   '("d (days)" "w (weeks)" "m (months)" "y (years)")
-                                   nil t)))
+            (unit (completing-read "Unit: " '("d (days)" "w (weeks)" "m (months)" "y (years)") nil t)))
         (setq repeater (format "+%s%s" n (substring unit 0 1)))))
     (org-schedule nil)
     (save-excursion
       (org-back-to-heading t)
-      (when (re-search-forward
-             "SCHEDULED: <\\([^>]+\\)>" (line-end-position 3) t)
+      (when (re-search-forward "SCHEDULED: <\\([^>]+\\)>" (line-end-position 3) t)
         (goto-char (match-end 1))
         (unless (string-match-p "\\+[0-9]" (match-string 1))
           (insert " " repeater))))))
 
 (defun org-gadget-recurring-weekday ()
-  "Build Nth-weekday schedule via diary-float sexp.
-E.g. 'First Friday of every month' → <%%(diary-float t 5 1)>"
   (interactive)
-  (let* ((occurrences '(("1st"  . 1) ("2nd" . 2) ("3rd" . 3)
-                        ("4th"  . 4) ("Last" . -1)))
-         (days '(("Sunday" . 0) ("Monday" . 1) ("Tuesday" . 2)
-                 ("Wednesday" . 3) ("Thursday" . 4) ("Friday" . 5)
-                 ("Saturday" . 6)))
-         (occ-name (completing-read "Which occurrence? "
-                                    (mapcar #'car occurrences) nil t))
+  (let* ((occurrences '(("1st" . 1) ("2nd" . 2) ("3rd" . 3) ("4th" . 4) ("Last" . -1)))
+         (days '(("Sunday" . 0) ("Monday" . 1) ("Tuesday" . 2) ("Wednesday" . 3) 
+                 ("Thursday" . 4) ("Friday" . 5) ("Saturday" . 6)))
+         (occ-name (completing-read "Which occurrence? " (mapcar #'car occurrences) nil t))
          (occ-num  (cdr (assoc occ-name occurrences)))
-         (day-name (completing-read "Which day? "
-                                    (mapcar #'car days) nil t))
+         (day-name (completing-read "Which day? " (mapcar #'car days) nil t))
          (day-num  (cdr (assoc day-name days)))
          (sexp     (format "%%%%(diary-float t %d %d)" day-num occ-num)))
     (save-excursion
@@ -449,215 +376,146 @@ E.g. 'First Friday of every month' → <%%(diary-float t 5 1)>"
     (message "Recurring: %s %s of every month" occ-name day-name)))
 
 ;; ═══════════════════════════════════════════════════════
-;; TRANSIENT MENUS  (max 2–3 columns for phone screens)
+;; NATIVE POPUP MENUS  (x-popup-menu engine)
 ;; ═══════════════════════════════════════════════════════
 
-(transient-define-prefix org-gadget-todo-menu ()
-  "Set Org TODO states."
-  [["Minimal"
-    ("1" "OPEN"    (lambda () (interactive) (org-todo "OPEN")))
-    ("2" "ACTIVE"  (lambda () (interactive) (org-todo "ACTIVE")))
-    ("3" "CLOSED"  (lambda () (interactive) (org-todo "CLOSED")))
-    ""
-    (">" "Tag NEXT"    (lambda () (interactive) (org-toggle-tag "NEXT")))
-    ("b" "Tag BLOCKED" (lambda () (interactive) (org-toggle-tag "BLOCKED")))
-    ("x" "Remove State" (lambda () (interactive) (org-todo 'none)))]
-   ["Traditional"
-    ("t" "TODO"      (lambda () (interactive) (org-todo "TODO")))
-    ("n" "NEXT"      (lambda () (interactive) (org-todo "NEXT")))
-    ("s" "STARTED"   (lambda () (interactive) (org-todo "STARTED")))
-    ("d" "DONE"      (lambda () (interactive) (org-todo "DONE")))
-    ("w" "WAITING"   (lambda () (interactive) (org-todo "WAITING")))
-    ("c" "CANCELLED" (lambda () (interactive) (org-todo "CANCELLED")))]]
-  [("q" "Dismiss" transient-quit-one)])
+(defun org-gadget--popup (event title &rest panes)
+  "Show a native popup menu. Executes the chosen ACTION automatically."
+  (let ((choice (x-popup-menu (or event t) (cons title panes))))
+    (when choice
+      (if (commandp choice)
+          (call-interactively choice)
+        (funcall choice)))))
 
-(transient-define-prefix org-gadget-priority-menu ()
-  "Set Org priorities."
-  [["Set Priority"
-    ("a" "A (High)"   (lambda () (interactive) (org-priority ?A)))
-    ("b" "B (Medium)" (lambda () (interactive) (org-priority ?B)))
-    ("c" "C (Low)"    (lambda () (interactive) (org-priority ?C)))]
-   ["Adjust"
-    ("+" "Increase" (lambda () (interactive) (org-priority 'up)))
-    ("-" "Decrease" (lambda () (interactive) (org-priority 'down)))
-    ("x" "Remove"   (lambda () (interactive) (org-priority ?\s)))]]
-  [("q" "Dismiss" transient-quit-one)])
+(defun org-gadget-todo-menu (&optional event)
+  (interactive "e")
+  (org-gadget--popup event "Set TODO State"
+    '("Minimal"
+      ("OPEN"         . (lambda () (org-todo "OPEN")))
+      ("ACTIVE"       . (lambda () (org-todo "ACTIVE")))
+      ("CLOSED"       . (lambda () (org-todo "CLOSED")))
+      (""             . nil)
+      ("Tag NEXT"     . (lambda () (org-toggle-tag "NEXT")))
+      ("Tag BLOCKED"  . (lambda () (org-toggle-tag "BLOCKED")))
+      ("Remove State" . (lambda () (org-todo 'none))))
+    '("Traditional"
+      ("TODO"         . (lambda () (org-todo "TODO")))
+      ("NEXT"         . (lambda () (org-todo "NEXT")))
+      ("STARTED"      . (lambda () (org-todo "STARTED")))
+      ("DONE"         . (lambda () (org-todo "DONE")))
+      ("WAITING"      . (lambda () (org-todo "WAITING")))
+      ("CANCELLED"    . (lambda () (org-todo "CANCELLED"))))))
 
-(transient-define-prefix org-gadget-agenda-menu ()
-  "Org Agenda dispatcher."
-  [["Views"
-    ("d" "Day"    (lambda () (interactive) (org-agenda-list nil nil 'day)))
-    ("w" "Week"   (lambda () (interactive) (org-agenda-list nil nil 'week)))
-    ("m" "Month"  (lambda () (interactive) (org-agenda-list nil nil 'month)))]
-   ["Tasks"
-    ("t" "Global TODOs"     (lambda () (interactive) (org-agenda nil "t")))
-    ("T" "Specific keyword" (lambda () (interactive) (org-agenda nil "T")))
-    ("<" "Buffer only"      (lambda () (interactive) (org-agenda '(4) "a")))]]
-  [["Search"
-    ("#" "Tags/Properties" (lambda () (interactive) (org-agenda nil "m")))
-    ("!" "Match TODOs"     (lambda () (interactive) (org-agenda nil "M")))
-    ("s" "Full-text"       (lambda () (interactive) (org-agenda nil "s")))]
-   ["More"
-    ("n" "Agenda + TODOs"  org-gadget-agenda-combo)
-    ("*" "Native Dispatch" org-agenda)]]
-  [("q" "Dismiss" transient-quit-one)])
+(defun org-gadget-priority-menu (&optional event)
+  (interactive "e")
+  (org-gadget--popup event "Priority"
+    '("Set Priority"
+      ("A (High)"   . (lambda () (org-priority ?A)))
+      ("B (Medium)" . (lambda () (org-priority ?B)))
+      ("C (Low)"    . (lambda () (org-priority ?C))))
+    '("Adjust"
+      ("Increase"   . (lambda () (org-priority 'up)))
+      ("Decrease"   . (lambda () (org-priority 'down)))
+      ("Remove"     . (lambda () (org-priority ?\s))))))
 
-(transient-define-prefix org-gadget-sort-menu ()
-  "Sort Org entries or list items."
-  [:description
-   (lambda ()
-     (format "Sorting: %s"
-             (cond ((org-at-item-p)    (propertize "List Items" 'face 'font-lock-variable-name-face))
-                   ((org-at-heading-p) (propertize "Subtree"    'face 'font-lock-function-name-face))
-                   (t                  (propertize "Nothing!"   'face 'error)))))]
-  ["Direction"
-   ("-r" "Reverse" "-r")]
-  [["Basic"
-    ("a" "Alphabetical" (lambda () (interactive) (org-gadget--sort ?a)))
-    ("n" "Numeric"      (lambda () (interactive) (org-gadget--sort ?n)))
-    ("t" "Time/Date"    (lambda () (interactive) (org-gadget--sort ?t)))]
-   ["Status"
-    ("k" "TODO keyword" (lambda () (interactive) (org-gadget--sort ?k)))
-    ("d" "Deadline"     (lambda () (interactive) (org-gadget--sort ?d)))
-    ("s" "Scheduled"    (lambda () (interactive) (org-gadget--sort ?s)))]]
-  [["Metadata"
-    ("p" "Priority" (lambda () (interactive) (org-gadget--sort ?p)))
-    ("c" "Created"  (lambda () (interactive) (org-gadget--sort ?c)))]
-   ["Advanced"
-    ("r" "Property" (lambda () (interactive) (org-gadget--sort ?r)))
-    ("f" "Function" (lambda () (interactive) (org-gadget--sort ?f)))]]
-  [("q" "Dismiss" transient-quit-one)]
-  (interactive)
-  (if (or (org-at-item-p) (org-at-heading-p))
-      (transient-setup 'org-gadget-sort-menu)
-    (user-error "Place point on a heading or list item to sort")))
+(defun org-gadget-agenda-menu (&optional event)
+  (interactive "e")
+  (org-gadget--popup event "Org Agenda"
+    '("Views"
+      ("Day"   . (lambda () (org-agenda-list nil nil 'day)))
+      ("Week"  . (lambda () (org-agenda-list nil nil 'week)))
+      ("Month" . (lambda () (org-agenda-list nil nil 'month))))
+    '("Tasks & Search"
+      ("Global TODOs"     . (lambda () (org-agenda nil "t")))
+      ("Specific keyword" . (lambda () (org-agenda nil "T")))
+      ("Tags/Properties"  . (lambda () (org-agenda nil "m")))
+      ("Match TODOs"      . (lambda () (org-agenda nil "M")))
+      ("Full-text"        . (lambda () (org-agenda nil "s"))))
+    '("More"
+      ("Agenda + TODOs"   . org-gadget-agenda-combo)
+      ("Buffer only"      . (lambda () (org-agenda '(4) "a")))
+      ("Native Dispatch"  . org-agenda))))
 
-;; ═══════════════════════════════════════════════════════
-;; ARROW TOGGLE
-;; ═══════════════════════════════════════════════════════
+(defun org-gadget-sort-menu (&optional event)
+  (interactive "e")
+  (if (not (or (org-at-item-p) (org-at-heading-p)))
+      (user-error "Place point on a heading or list item to sort")
+    (org-gadget--popup event "Sort By"
+      '("Basic"
+        ("Alphabetical" . (lambda () (org-gadget--sort ?a)))
+        ("Numeric"      . (lambda () (org-gadget--sort ?n)))
+        ("Time/Date"    . (lambda () (org-gadget--sort ?t))))
+      '("Status"
+        ("TODO keyword" . (lambda () (org-gadget--sort ?k)))
+        ("Deadline"     . (lambda () (org-gadget--sort ?d)))
+        ("Scheduled"    . (lambda () (org-gadget--sort ?s))))
+      '("Advanced"
+        ("Priority"     . (lambda () (org-gadget--sort ?p)))
+        ("Created"      . (lambda () (org-gadget--sort ?c)))
+        ("Property"     . (lambda () (org-gadget--sort ?r)))
+        ("Function"     . (lambda () (org-gadget--sort ?f)))))))
 
-(defun org-gadget-toggle-arrows ()
-  "Toggle visibility of the collapsible arrow icons and re-render."
-  (interactive)
-  (setq org-gadget--arrows-expanded (not org-gadget--arrows-expanded))
-  (when (and org-gadget--window (window-live-p org-gadget--window))
-    (with-selected-window org-gadget--window
-      (org-gadget--render))))
+(defun org-gadget-emphasis-menu (&optional event)
+  (interactive "e")
+  (org-gadget--popup event "Formatting"
+    '("Standard"
+      ("Bold"      . (lambda () (org-gadget--emphasis-apply ?*)))
+      ("Italic"    . (lambda () (org-gadget--emphasis-apply ?/)))
+      ("Underline" . (lambda () (org-gadget--emphasis-apply ?_))))
+    '("Extra"
+      ("Strike"    . (lambda () (org-gadget--emphasis-apply ?+)))
+      ("Code"      . (lambda () (org-gadget--emphasis-apply ?~)))
+      ("Verbatim"  . (lambda () (org-gadget--emphasis-apply ?=))))))
 
-(transient-define-prefix org-gadget-emphasis-menu ()
-  "Apply Org emphasis formatting."
-  [["Format"
-    ("b" "Bold"      (lambda () (interactive) (org-gadget--emphasis-apply ?*)))
-    ("i" "Italic"    (lambda () (interactive) (org-gadget--emphasis-apply ?/)))
-    ("u" "Underline" (lambda () (interactive) (org-gadget--emphasis-apply ?_)))]
-   ["Extra"
-    ("s" "Strike"    (lambda () (interactive) (org-gadget--emphasis-apply ?+)))
-    ("c" "Code"      (lambda () (interactive) (org-gadget--emphasis-apply ?~)))
-    ("v" "Verbatim"  (lambda () (interactive) (org-gadget--emphasis-apply ?=)))]]
-  [("q" "Dismiss" transient-quit-one)])
+(defun org-gadget-block-menu (&optional event)
+  (interactive "e")
+  (org-gadget--popup event "Insert Block"
+    '("Blocks"
+      ("Source (code)" . (lambda () (org-insert-structure-template "src")))
+      ("Quote"         . (lambda () (org-insert-structure-template "quote")))
+      ("Example"       . (lambda () (org-insert-structure-template "example")))
+      ("Center"        . (lambda () (org-insert-structure-template "center")))
+      ("Verse"         . (lambda () (org-insert-structure-template "verse")))
+      ("Note"          . (lambda () (org-insert-structure-template "note"))))))
 
-(transient-define-prefix org-gadget-block-menu ()
-  "Insert Org structure blocks."
-  [["Common"
-    ("s" "Source (code)" (lambda () (interactive) (org-insert-structure-template "src")))
-    ("q" "Quote"         (lambda () (interactive) (org-insert-structure-template "quote")))
-    ("e" "Example"       (lambda () (interactive) (org-insert-structure-template "example")))]
-   ["Formatting"
-    ("c" "Center"   (lambda () (interactive) (org-insert-structure-template "center")))
-    ("v" "Verse"    (lambda () (interactive) (org-insert-structure-template "verse")))
-    ("n" "Note"     (lambda () (interactive) (org-insert-structure-template "note")))]]
-  [("Q" "Dismiss" transient-quit-one)])
+(defun org-gadget-date-menu (&optional event)
+  (interactive "e")
+  (org-gadget--popup event "Dates & Scheduling"
+    '("Set Date"
+      ("Schedule"       . org-schedule)
+      ("Deadline"       . org-deadline)
+      ("Timestamp"      . org-time-stamp)
+      ("Inactive Stamp" . org-time-stamp-inactive))
+    '("Recurring"
+      ("Repeating..."   . org-gadget-schedule-repeating)
+      ("Nth Weekday..." . org-gadget-recurring-weekday))))
 
-(transient-define-prefix org-gadget-date-menu ()
-  "Schedule, deadlines, and recurring events."
-  [["Dates"
-    ("s" "Schedule"       org-schedule)
-    ("d" "Deadline"       org-deadline)
-    ("t" "Timestamp"      org-time-stamp)
-    ("T" "Inactive Stamp" org-time-stamp-inactive)]
-   ["Recurring"
-    ("r" "Repeating..."   org-gadget-schedule-repeating)
-    ("f" "Nth Weekday..." org-gadget-recurring-weekday)]]
-  [("q" "Dismiss" transient-quit-one)])
+(defun org-gadget-archive-menu (&optional event)
+  (interactive "e")
+  (let* ((heading (org-get-heading t t t t))
+         (title (format "Archive: %s" (truncate-string-to-width (or heading "?") 30 nil nil "…"))))
+    (org-gadget--popup event "Confirm Archive"
+      `(,title
+        ("Yes, archive subtree" . org-archive-subtree)
+        ("Refile instead"       . org-refile)))))
 
-(transient-define-prefix org-gadget-archive-menu ()
-  "Confirm before archiving."
-  [:description
-   (lambda ()
-     (let ((heading (org-get-heading t t t t)))
-       (format "Archive: %s"
-               (propertize (truncate-string-to-width (or heading "?") 40 nil nil "…")
-                           'face 'font-lock-warning-face))))]
-  [["Confirm"
-    ("y" "Yes, archive subtree" org-archive-subtree)
-    ("r" "Refile instead"       org-refile)
-    ("q" "Dismiss"               transient-quit-one)]])
-
-(transient-define-prefix org-gadget-link-menu ()
-  "Insert and manage Org links."
-  [["Insert"
-    ("l" "Insert Link"  org-insert-link)
-    ("s" "Store Link"   org-store-link)]
-   ["Navigate"
-    ("n" "Next Link"     org-next-link)
-    ("p" "Previous Link" org-previous-link)
-    ("o" "Open at Point" org-open-at-point)]]
-  [("q" "Dismiss" transient-quit-one)])
-
-;; --- Transient drag-to-select fix ---
-;; When a user long-presses an icon, the transient menu opens.
-;; If they drag their finger/mouse to a transient item and release,
-;; Emacs sees a drag-mouse-1 event which transient doesn't handle.
-;; This advice converts drags into clean clicks at the release point.
-
-(defun org-gadget--transient-drag-fix (orig-fn &rest args)
-  "If transient-push-button receives a drag, convert it to a click at the release point."
-  (if (eq (car-safe last-command-event) 'drag-mouse-1)
-      (let* ((end-pos (event-end last-command-event))
-             (click-event (list 'mouse-1 end-pos)))
-        (setq unread-command-events
-              (cons click-event unread-command-events)))
-    (apply orig-fn args)))
-
-(with-eval-after-load 'transient
-  (advice-add 'transient-push-button :around #'org-gadget--transient-drag-fix)
-  (keymap-set transient-base-map "<drag-mouse-1>" #'transient-push-button)
-
-  ;; --- Hover highlight on transient buttons ---
-  ;; After transient renders, walk the buffer and add mouse-face
-  ;; to all buttons so they visually highlight on hover/touch.
-  ;; Uses a short delay to ensure buttons are fully rendered.
-  (defun org-gadget--transient-add-hover (&rest _)
-    "Add mouse-face highlight to all buttons in the transient buffer."
-    (run-with-timer
-     0.05 nil
-     (lambda ()
-       (let ((buf (get-buffer " *transient*")))
-         (when buf
-           (with-current-buffer buf
-             (save-excursion
-               (let ((inhibit-read-only t))
-                 (goto-char (point-min))
-                 (while (not (eobp))
-                   (let ((btn (button-at (point))))
-                     (if btn
-                         (progn
-                           (put-text-property (button-start btn) (button-end btn)
-                                              'mouse-face 'highlight)
-                           (goto-char (button-end btn)))
-                       (forward-char 1))))))))))))
-
-  (advice-add 'transient--show :after #'org-gadget--transient-add-hover)
-  (add-hook 'transient-exit-hook
-            (lambda () (setq org-gadget--press-fired nil))))
+(defun org-gadget-link-menu (&optional event)
+  (interactive "e")
+  (org-gadget--popup event "Links"
+    '("Insert"
+      ("Insert Link"   . org-insert-link)
+      ("Store Link"    . org-store-link))
+    '("Navigate"
+      ("Next Link"     . org-next-link)
+      ("Previous Link" . org-previous-link)
+      ("Open at Point" . org-open-at-point))))
 
 ;; ═══════════════════════════════════════════════════════
 ;; TOOLBAR ICON INSERTION
 ;; ═══════════════════════════════════════════════════════
 
 (defun org-gadget--insert-icon (icon-str data)
-  "Insert ICON-STR with interaction keybindings baked into closures.
-DATA is an icon plist. No text-property lookups at event time."
+  "Insert ICON-STR with interaction keybindings baked into closures."
   (let* ((inhibit-read-only t)
          (map       (make-sparse-keymap))
          (click-fn  (plist-get data :click))
@@ -670,7 +528,7 @@ DATA is an icon plist. No text-property lookups at event time."
                              (menu-fn "\n  Right-click for menu")
                              (t ""))))
          (click-cb  (when click-fn (org-gadget--make-callback click-fn)))
-         (menu-cb   (when menu-fn  (org-gadget--make-callback menu-fn)))
+         (menu-cb   (when menu-fn  (org-gadget--make-lp-callback menu-fn)))
          (lp-cb     (when lp-fn    (org-gadget--make-lp-callback lp-fn))))
 
     ;; --- LEFT CLICK (Touch release) ---
@@ -686,8 +544,6 @@ DATA is an icon plist. No text-property lookups at event time."
     ;; --- RIGHT CLICK ---
     (define-key map [down-mouse-3] #'ignore)
     (define-key map [mouse-3] (or menu-cb click-cb #'ignore))
-
-    ;; --- KEYBOARD ---
     (define-key map [return] (or click-cb #'ignore))
 
     ;; --- INSERT ---
@@ -697,12 +553,11 @@ DATA is an icon plist. No text-property lookups at event time."
                         'mouse-face 'highlight
                         'keymap map
                         'pointer 'hand
-                        ;; Store the long-press callback for the local handler
                         'org-gadget-lp-cb lp-cb))
     (insert " ")))
 
 ;; ═══════════════════════════════════════════════════════
-;; GROUP DEFINITIONS  (data-driven)
+;; GROUP DEFINITIONS
 ;; ═══════════════════════════════════════════════════════
 
 (defvar org-gadget-group-definitions
@@ -799,8 +654,7 @@ DATA is an icon plist. No text-property lookups at event time."
      . ((:icon "nf-md-lightning_bolt"  :tooltip "Command Palette (M-x)"
          :click ,#'execute-extended-command
          :long-press nil  :menu nil))))
-  "Alist of group symbol → list of icon plists.
-Display order controlled by `org-gadget-group-order'.")
+  "Alist of group symbol → list of icon plists.")
 
 ;; ═══════════════════════════════════════════════════════
 ;; TOOLBAR RENDERING
@@ -830,37 +684,39 @@ Display order controlled by `org-gadget-group-order'.")
       (goto-char (point-min))
       (read-only-mode 1)
       (setq-local truncate-lines t)
+      (setq-local auto-hscroll-mode nil)     ;; Fixes jumping/scrolling
+      (setq-local touch-screen-delay 0.3)    ;; Speeds up the hold action
       (setq-local cursor-type nil)
       (setq-local mode-line-format nil)
       (setq-local window-size-fixed 'height)
       
-;; Intercept the native long-press to prevent "Mark set"
+      ;; Catch the native touch hold, pass the event directly to the menu callback!
       (local-set-key [touchscreen-hold]
                      (lambda (event)
                        (interactive "e")
-                       (let* ((posn (cadr event))
-                              (pt (and posn (posn-point posn)))
-                              (cb (and pt (get-text-property pt 'org-gadget-lp-cb))))
+                       (let* ((posn (event-start event))
+                              (pt   (posn-point posn))
+                              (win  (posn-window posn))
+                              (buf  (when (windowp win) (window-buffer win)))
+                              (cb   (when (and pt buf)
+                                      (get-text-property pt 'org-gadget-lp-cb buf))))
                          (when cb
                            (setq org-gadget--press-fired t)
-                           (funcall cb))))))))
+                           (funcall cb event))))))))
 
 ;; ═══════════════════════════════════════════════════════
 ;; SHOW / HIDE / AUTO-TOGGLE
 ;; ═══════════════════════════════════════════════════════
 
 (defun org-gadget-show ()
-  "Show the toolbar below the currently selected window.
-Only renders on first display; subsequent calls just ensure the window exists."
+  "Show the toolbar below the currently selected window."
   (interactive)
   (let ((buf (get-buffer-create org-gadget-buffer-name)))
     (if (and org-gadget--window (window-live-p org-gadget--window))
-        ;; Already visible — just ensure properties, do NOT re-render
         (progn
           (set-window-dedicated-p org-gadget--window t)
           (set-window-parameter org-gadget--window 'no-other-window t)
           (set-window-parameter org-gadget--window 'no-delete-other-windows t))
-      ;; First display — create window and render once
       (setq org-gadget--window
             (display-buffer buf
                             '((display-buffer-below-selected)
@@ -900,15 +756,11 @@ Only renders on first display; subsequent calls just ensure the window exists."
     found))
 
 (defun org-gadget--auto-toggle (&optional frame-or-window)
-  "Show toolbar if any Org file is visible, hide otherwise.
-Works from `window-selection-change-functions' and
-`window-buffer-change-functions'."
+  "Show toolbar if any Org file is visible, hide otherwise."
   (when org-gadget-auto-show
     (let* ((win (if (windowp frame-or-window) frame-or-window (selected-window)))
            (buf (window-buffer win)))
-      ;; Always track the last usable window
       (org-gadget--record-org-window)
-      ;; Skip events inside toolbar or minibuffer
       (unless (or (string= (buffer-name buf) org-gadget-buffer-name)
                   (window-minibuffer-p win))
         (if (org-gadget--any-org-file-visible-p)
@@ -916,10 +768,9 @@ Works from `window-selection-change-functions' and
           (org-gadget-hide))))))
 
 ;; ═══════════════════════════════════════════════════════
-;; KEYBINDINGS
+;; KEYBINDINGS & MINOR MODE
 ;; ═══════════════════════════════════════════════════════
 
-;; Distinguish C-i from TAB
 (keymap-set input-decode-map "C-i" "C-<i>")
 
 (defun org-gadget--setup-keybindings ()
@@ -933,13 +784,9 @@ Works from `window-selection-change-functions' and
   (keymap-set org-mode-map "C-c ,"   #'org-gadget-priority-menu)
   (keymap-set org-mode-map "C-c C-," #'org-gadget-block-menu))
 
-;; ═══════════════════════════════════════════════════════
-;; MINOR MODE
-;; ═══════════════════════════════════════════════════════
-
 ;;;###autoload
 (define-minor-mode org-gadget-mode
-  "Global minor mode for the Org-gadget toolbar and keybindings."
+  "Global minor mode for the Org-gadget toolbar and native popups."
   :global t
   :group 'org-gadget
   (if org-gadget-mode
@@ -954,7 +801,6 @@ Works from `window-selection-change-functions' and
     (remove-hook 'org-mode-hook #'org-gadget--setup-keybindings)
     (org-gadget-hide)))
 
-;; Global binding (available outside Org buffers)
 (keymap-global-set "C-c a" #'org-gadget-agenda-menu)
 
 (provide 'org-gadget)
